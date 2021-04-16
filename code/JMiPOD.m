@@ -1,6 +1,6 @@
-function [ S_STRUCT , pChange, ChangeRate , Deflection ] = JMiPOD_fast (C_STRUCT , Payload)
+function [ S_STRUCT , pChange, ChangeRate , Deflection ] = JMiPOD (C_STRUCT, Payload)
 % -------------------------------------------------------------------------
-% J_MiPOD Embedding       |      February 2021       |      version 1.0
+% J_MiPOD Embedding       |      December 2020       |      version 0.1 
 % -------------------------------------------------------------------------
 % INPUT:
 %  - C_STRUCT    - Struct representing JPEG compressed image (or path to JPEG file)
@@ -74,21 +74,9 @@ WienerResidual = C_SPATIAL - wiener2(C_SPATIAL,[2,2]);
 Variance = VarianceEstimationDCT2D(WienerResidual,3,3);
 
 % ... and apply the covariance transformation to DCT domain
-% funVar = @(x) reshape( diag(MatDCT*diag(x(:))*MatDCT')  , 8 , 8 ) ./ ( C_STRUCT.quant_tables{1}.^2 );
-% VarianceDCT = blkproc(Variance,[8 8],funVar);
-
-% In this code we replaced the blkproc with nested loops and simplied covariance linear transformation
-MatDCTq = MatDCT.^2;
-Qvec = C_STRUCT.quant_tables{1}(:);
-for idx=1:64 , MatDCTq(idx,:) = MatDCTq(idx,:)./ Qvec(idx).^2; end
-
 VarianceDCT = zeros(size(C_SPATIAL));
-for idxR=1:8:size( Variance, 1)
-    for idxC=1:8:size( Variance, 2)
-        x = Variance(idxR:idxR+7 , idxC:idxC+7);
-        VarianceDCT(idxR:idxR+7 , idxC:idxC+7) = reshape( MatDCTq * x(:) , 8,8);
-    end
-end
+funVar = @(x) reshape( diag(MatDCT*diag(x(:))*MatDCT')  , 8 , 8 ) ./ ( C_STRUCT.quant_tables{1}.^2 );
+VarianceDCT = blkproc(Variance,[8 8],funVar);
 VarianceDCT(VarianceDCT<1e-5) = 1e-5;
 
 % Compute Fisher information and smooth it
@@ -152,14 +140,8 @@ function [ imDecompress , dct64_mtx ] = RCdecompressJPEG(imJPEG)
     imDecompress = zeros( [ size( imJPEG.coef_arrays{1} ), numel( imJPEG.coef_arrays ) ] );
     DCTcoefs = imJPEG.coef_arrays{1};
     QM = imJPEG.quant_tables{1};
-% Replace the blkproc use with nested loops
-%     funIDCT = @(x) T'*(x.*QM)*T ;
-%     imDecompress = blkproc(DCTcoefs,[8 8],funIDCT);
-    for idxR=1:8:size( DCTcoefs, 1)
-        for idxC=1:8:size( DCTcoefs, 2)
-            imDecompress(idxR:idxR+7 , idxC:idxC+7) = T'*(DCTcoefs(idxR:idxR+7 , idxC:idxC+7).*QM)*T;
-        end
-    end
+    funIDCT = @(x) T'*(x.*QM)*T ;
+    imDecompress = blkproc(DCTcoefs,[8 8],funIDCT);
 end
 
 % Estimation of the pixels' variance based on a 2D-DCT (trigonometric polynomial) model
@@ -195,31 +177,29 @@ function EstimatedVariance = VarianceEstimationDCT2D(Image, BlockSize, Degree)
 end
 
 % Computing the embedding change probabilities
-% Updated from MiPOD for speed purposes
 function [beta] = TernaryProbs(FI, payload)
-    load('ixlnx3_5.mat');
+    load('ixlnx3.mat');
 
     % Initial search interval for lambda
-    [L, R] = deal (0.1 , 10);
+    [L, R] = deal (10^3, 10^6);
 
     fL = h_tern(1./invxlnx3_fast(L*FI,ixlnx3)) - payload;
     fR = h_tern(1./invxlnx3_fast(R*FI,ixlnx3)) - payload;
     % If the range [L,R] does not cover alpha enlarge the search interval
     while fL*fR > 0
         if fL > 0
-            L = R;
             R = 2*R;
             fR = h_tern(1./invxlnx3_fast(R*FI,ixlnx3)) - payload;
         else
-            R = L;
             L = L/2;
             fL = h_tern(1./invxlnx3_fast(L*FI,ixlnx3)) - payload;
         end
     end
 
     % Search for the labmda in the specified interval
-    [i, fM, TM] = deal(0, 100, zeros(20,2));
-    while (abs(fM)>max(2,payload/2500.0) && i<20)
+    [i, fM, TM] = deal(0, 1, zeros(30,2));
+    while (abs(fM)>0.0001 && i<30)
+
         M = (L+R)/2;
         fM = h_tern(1./invxlnx3_fast(M*FI,ixlnx3)) - payload;
         if fL*fM < 0, R = M; fR = fM;
@@ -227,7 +207,7 @@ function [beta] = TernaryProbs(FI, payload)
         i = i + 1;
         TM(i,:) = [fM,M];
     end
-    if (i==20)
+    if (i==30)
         M = TM(find(abs(TM(:,1)) == min(abs(TM(:,1))),1,'first'),2);
     end
     % Compute beta using the found lambda
@@ -236,21 +216,22 @@ end
 
 
 % Fast solver of y = x*log(x-2) paralellized over all pixels
-% Updated from MiPOD for speed purposes
 function x = invxlnx3_fast(y,f)
     i_large = y>1000;
     i_small = y<=1000;
 
-    iyL = floor(y(i_small)/0.05)+1;
+    iyL = floor(y(i_small)/0.01)+1;
     iyR = iyL + 1;
-    iyR(iyR>20000) = 20000;
+    iyR(iyR>100001) = 100001;
 
     x = zeros(size(y));
-    x(i_small) = f(iyL) + (y(i_small)-(iyL-1)*0.05).*(f(iyR)-f(iyL));
+    x(i_small) = f(iyL) + (y(i_small)-(iyL-1)*0.01).*(f(iyR)-f(iyL));
 
-    z = y(i_large)./log(y(i_large)-2);
-    z = y(i_large)./log(z-2);
-    x(i_large) = y(i_large)./log(z-2);
+      z = y(i_large)./log(y(i_large)-2);
+      for j = 1 : 10
+          z = y(i_large)./log(z-2);
+      end
+      x(i_large) = z;
 end
 
 % Ternary entropy function expressed in nats
