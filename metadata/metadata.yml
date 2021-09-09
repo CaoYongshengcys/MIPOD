@@ -1,10 +1,11 @@
 metadata_version: 1
-name: JMiPOD / Matlab implementation v0
+name: 'J-MiPOD : Data Hiding (Steganography) in JPEG Image / Matlab implementation v0'
 description: |-
   Research code associated with the journal paper entitled:
   "Efficient Steganography in JPEG Images by Minimizing Performance of Optimal Detector"
   by : R. Cogranne, Q. Giboulot & P. Bas
   Submitted to IEEE Transactions on Information Forensics and Security in Jan. 2021
+  Extension for the Side-Informed case, SI-MiPOD embedding algorithm, is also available at codeOcean at : TBA
 tags:
 - steganography
 - steganalysis
