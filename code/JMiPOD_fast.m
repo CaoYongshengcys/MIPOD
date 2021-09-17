@@ -218,17 +218,18 @@ function [beta] = TernaryProbs(FI, payload)
     end
 
     % Search for the labmda in the specified interval
-    [i, fM, TM] = deal(0, 100, zeros(20,2));
-    while (abs(fM)>max(2,payload/2500.0) && i<20)
+    i = 0;
+    M = (L+R)/2;
+    fM = h_tern(1./invxlnx3_fast(M*FI,ixlnx3)) - payload;
+    while (abs(fM)>max(2,payload/1000.0) && i<20)
+        if fL*fM < 0,
+            R = M; fR = fM;
+        else
+            L = M; fL = fM;
+        end
+        i = i + 1;
         M = (L+R)/2;
         fM = h_tern(1./invxlnx3_fast(M*FI,ixlnx3)) - payload;
-        if fL*fM < 0, R = M; fR = fM;
-        else          L = M; fL = fM; end
-        i = i + 1;
-        TM(i,:) = [fM,M];
-    end
-    if (i==20)
-        M = TM(find(abs(TM(:,1)) == min(abs(TM(:,1))),1,'first'),2);
     end
     % Compute beta using the found lambda
     beta = 1./invxlnx3_fast(M*FI,ixlnx3);

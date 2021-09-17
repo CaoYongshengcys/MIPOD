@@ -1,5 +1,5 @@
 metadata_version: 1
-name: 'J-MiPOD : Data Hiding (Steganography) in JPEG Image / Matlab implementation v0'
+name: 'J-MiPOD : Data Hiding (Steganography) in JPEG Image / Matlab implementation v1'
 description: |-
   Research code associated with the journal paper entitled:
   "Efficient Steganography in JPEG Images by Minimizing Performance of Optimal Detector"
