@@ -82,13 +82,14 @@ MatDCTq = MatDCT.^2;
 Qvec = C_STRUCT.quant_tables{1}(:);
 for idx=1:64 , MatDCTq(idx,:) = MatDCTq(idx,:)./ Qvec(idx).^2; end
 
-VarianceDCT = zeros(size(C_SPATIAL));
-for idxR=1:8:size( Variance, 1)
-    for idxC=1:8:size( Variance, 2)
-        x = Variance(idxR:idxR+7 , idxC:idxC+7);
-        VarianceDCT(idxR:idxR+7 , idxC:idxC+7) = reshape( MatDCTq * x(:) , 8,8);
-    end
-end
+VarianceDCT = vec2im( MatDCTq *  im2vec( Variance , [8,8] )  , [0,0], [8,8]) ;
+%VarianceDCT = zeros(size(C_SPATIAL));
+%for idxR=1:8:size( Variance, 1)
+%    for idxC=1:8:size( Variance, 2)
+%        x = Variance(idxR:idxR+7 , idxC:idxC+7);
+%        VarianceDCT(idxR:idxR+7 , idxC:idxC+7) = reshape( MatDCTq * x(:) , 8,8);
+%    end
+%end
 VarianceDCT(VarianceDCT<1e-5) = 1e-5;
 
 % Compute Fisher information and smooth it
@@ -149,17 +150,9 @@ function [ imDecompress , dct64_mtx ] = RCdecompressJPEG(imJPEG)
     for i=1:64 ; dcttmp=zeros(8); dcttmp(i)=1; TTMP =  T*dcttmp*T'; dct64_mtx(:,i) = TTMP(:); end
 
     %Apply image decompression
-    imDecompress = zeros( [ size( imJPEG.coef_arrays{1} ), numel( imJPEG.coef_arrays ) ] );
     DCTcoefs = imJPEG.coef_arrays{1};
     QM = imJPEG.quant_tables{1};
-% Replace the blkproc use with nested loops
-%     funIDCT = @(x) T'*(x.*QM)*T ;
-%     imDecompress = blkproc(DCTcoefs,[8 8],funIDCT);
-    for idxR=1:8:size( DCTcoefs, 1)
-        for idxC=1:8:size( DCTcoefs, 2)
-            imDecompress(idxR:idxR+7 , idxC:idxC+7) = T'*(DCTcoefs(idxR:idxR+7 , idxC:idxC+7).*QM)*T;
-        end
-    end
+    imDecompress = vec2im( dct64_mtx' * ( im2vec( DCTcoefs , [8,8] ).* QM(:) ) + 128  , [0,0], [8,8]);
 end
 
 % Estimation of the pixels' variance based on a 2D-DCT (trigonometric polynomial) model
